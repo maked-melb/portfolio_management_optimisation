@@ -1,0 +1,84 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+
+\title{Tax and Trading Efficient Portfolios}
+\author{Group 13 }
+\date{April 2022}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+Equity portfolios are a group of equity holdings, in unitized shares, that are costly to trade.  From period to period the desirable securities to hold changes.  Mostly, these changes are implemented by fund managers who charge large fees, or are passively re-balanced without regard to cost to the portfolio.  The implicit and explicit, as well as the tax impact, of trading a portfolio from one holding to another are well known but lead to complicated optimization problems.
+We consider optimizing a portfolio of large US equity securities when no information about their expected return is present.  In this case, trading looks to minimize cost, but must be done as the portfolio will require either the investment or divestment of assets on a monthly basis. \
+
+\section{Definitions}
+
+Explicit trading costs are the known costs paid to a broker for executing the trade.  These are usual fixed (say \$5 a trade) for small trade and a percentage (say 0.01 - 0.05\%) for larger trades.
+
+$$etc = max(k,B*ta)$$
+\\
+etc - explicit trade cost \\
+k - fixed \$ trade price \\
+ta - trade amount in \$ \\
+B - brokerage
+
+Implicit trading costs are the unobserved changes in share prices that occur because your trade entered the market.  If you place a buy order, you need to tempt a seller into the market to sell to you, and you will need to offer a higher price for this.  For small trades the price can be modelled by the bid/ask spread, and this is calling crossing the spread.  The spread creates a minimum implicit trade cost of a trade
+
+$$itc = max( \frac{bid - ask}{2 P},\frac{ta}{ADTV} tm)ta$$
+\\
+itc - impicit trade cost \\
+bid - ask - average bid - ask for a stock \\
+P - average price of stock \\
+ADTV - Average Daily Trading Volume \\
+tm - trade cost multiplier \\
+
+\section{Data}
+
+We have used data for individual US securities from the Datastream database from 1972 to 2021.  
+
+examples of input variables \\
+k \$5, median BAS is (bid - ask)/P ~ 0.2% \\
+ADTV \~ 0.5\% mkt cap \\
+tm \~ 3% \\
+
+\section{Problem}
+
+Determine monthly optimum trades;
+
+\begin{eqnarray*}
+min TTC_t &=& \sum_{i=1}^n \left [ etc_{i,t} + itc_{i,t} \right ] \\
+&=& \sum_{i=1}^n \left [ max(k,B*TV_{i,t}) + max( \frac{BASM}{ADTV_i} ,\frac{TV_{i,t}}{ADTV_i} TM)TV_{i,t} ] \right ] \\
+&=& \sum_{i=1}^n \left [ max(k,B*TV_{i,t}) + max( \frac{BASM}{TV_{i,t}} , TM)\frac{TV_{i,t}^2}{ADTV_i} ] \right ] \\
+TV_{i,t} &=& \left (S_{i,t} - S_{i-1,t} \right ) P_{i,t} \\
+\texttt{s.t.} \\
+\texttt{budget constraint } C_t - \sum_{i=1}^n TV_{i,t} &\geq& 0 \\
+\texttt{long only constraint } S_{i,t} &\geq& 0 \quad i \in [1,n] \\
+\end{eqnarray*}
+
+\section{Market Cap and Momentum Portfolios}
+Market Cap portfolios are a standard in the investing area, and they approximate the cheapest to trade portfolios.  Ignoring corporate actions (dividends, mergers, capital raises) the number of shares per company in the Market Cap portfolio would remain steady, and a portfolio without cash flows in our out does not need to be traded.  Unfortunately, corporate actions very often occur, but the resulting portfolio remains a low turnover one.  The Market Cap portfolio holds the portfolio of weights to each company proportional to the market capitalisation of the company at any month end.
+
+Momentum is a well known equity strategy where securities that have high historical performance outperform securities that have a low historical return.  REFERENCES  
+The historical return most commonly used is the last 12 months excluding the latest month (11 month return lagged one month).  The problem with this strategy is that the level of trading most often erodes the greater return of the strategy.  Turnover $TO_t$ is also calculated as a rough guide to the trade intensity of a portfolio.  Turnover is usually presented as one-way (that is 100\% equates to a complete sale and purchase of the entire portfolio).  The number is presented annually, with a maximum of 1200\% if trades are made monthly. 
+
+$$ TO_t = \frac{1}{2}\sum_{i=1}^n |TV_{i,t}|$$
+
+\begin{table}
+    \centering
+    \begin{tabular}{c|c|c|c|c}
+    A & Market & Market & 100 all market cap & mkt cap weighted \\
+    B & Momentum & Market & 25 highest Mom & mkt cap weighted \\
+    C & Market & Market & 100 all market cap & equal weighted \\
+    D & Momentum & Market & 25 highest Mom & equal weighted \\
+    \end{tabular}
+    \caption{Sample Un-optimised portfolio types}
+    \label{tab:my_label}
+\end{table}
+
+The full period performance, turnover is examined for these portfolios.
+
+\end{document}
