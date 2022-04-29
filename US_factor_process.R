@@ -13,69 +13,12 @@ setwd(dir.data)
 region.name=c("US")
 return.type.number <- 1
 
-filename.load <- paste(region.name,"_kappa_data_factor_bins_20210831_TU.csv",sep="")
-
-########################################################################
-#
-# Read in data and setup Dates
-#
-########################################################################
-data=NULL
-  
-setwd(dir.data)
-data <- read.csv(filename.load, header = TRUE, sep = ",")
-
-data$DateYYYYMM <- data$year*100+data$month
-subset.date <- unique(data$DateYYYYMM)
-subset.date <- sort(subset.date)
-subset.date.length <- length(subset.date)
-
-unique(data$nation)
-
-##########################################
-#
-# If wish to cut universe to particular country or region do it here
-#
-##########################################
-
-#data <- subset(data,nation=="b'AUSTRALIA'")
-
-tibble(data)
-plot(table(data$date),type="l")
-
-########################################################################
-#
-# Calculate Price and Div for each Asset per Date
-# No price data for date if no return data exists
-#
-########################################################################
-
-data_price = subset(data,select = c("DateYYYYMM","ws_id","price","return"))
-data_price_keep = subset(data_price,(DateYYYYMM==(subset.date[1])),select=c("DateYYYYMM","ws_id"))
-data_price_keep$Price = 1
-data_price_keep$Div = 0
-
-for (data.cycle in 1:(subset.date.length-1))  {
-
-  data_current = subset(data_price_keep,(DateYYYYMM==(subset.date[data.cycle])),select=c("ws_id","Price"))
-  data_forward = subset(data_price,(DateYYYYMM==(subset.date[data.cycle+1])),select = c("DateYYYYMM","ws_id","price","return"))
-  data_merge = merge(data_current,data_forward,by=c("ws_id"),all.x=TRUE)
-  data_merge$Price_next = data_merge$Price*(1+data_merge$price)
-  data_merge$Div = data_merge$Price*(data_merge$return - data_merge$price)
-  data_merge = na.omit(data_merge)
-  
-  data_merge = subset(data_merge,select=c("DateYYYYMM","ws_id","Price_next","Div"))
-  names(data_merge) = c("DateYYYYMM","ws_id","Price","Div")
-  head(data_merge)  
-  data_price_keep = rbind(data_price_keep,data_merge)
-  print(subset.date[data.cycle])
-}
-
-
-
-data_return <- merge(data,data_price_keep,by=c("ws_id","DateYYYYMM"))
+filename.load <- paste(region.name,"_latest_data_20220428.csv",sep="")
+##data_return = read.csv(file=filename.load )
 
 head(data_return)
+
+table(data_return$DateYYYYMM)
 
 factor.rank <- c("beta_bin_number","volatility_5yr_usd_bin_number","mktcap_dec_bin_number","value_bin_number","illiq_bin_number","roe_bin_number","opprof_bin_number","invmt_bin_number","mom_bin_number")                 
 factor.name <- c("beta","volatility_5yr_usd","mktcap_dec","value","illiq","roe","opprof","invmt","mom") 
@@ -92,7 +35,7 @@ factor.numb <- length(factor.rank)
 size.types <- c("all","large","small")
 size.types.length <- length(size.types)
 
-head(data)
+head(data_return)
 
 start.Date = min(data_return$DateYYYYMM)
 end.Date = max(data_return$DateYYYYMM)
@@ -100,15 +43,32 @@ end.Date = max(data_return$DateYYYYMM)
 Assets_keep = NULL
 results.keep = NULL
 
-#data = subset(data_use,(Date>=start.Date)&(Date<=end.Date))
-##data_use = subset(data_use,(Date>=start.date)&(Date<=end.date),select=c( "Date","Asset","Price","Div","Factor","mktcap"))
+#### Subset calculations with no and some optimisation
 
-for (factor.use in c(9)) {
+factor.use = 0
+direction = -1  
+starting_assets = 10^(8) 
+cashflow_percent = 0    #.05   # annual cashflow out of account as % of assets
+weighting_scheme = "Cap"
+size = 1000  
+trade_cost_include = TRUE
+optimised = TRUE
 
-for (direction in c(1)) {  
-  
-if (factor.use > 0) Factor_choose = factor.name[factor.use]
-if (factor.use == 0) Factor_choose = factor.name[1]
+for (factor.use in c(9:1)) {
+
+if (factor.use == 0) proportion.use = 1
+if (factor.use > 0) proportion.use = c((1)/4)
+proportion = proportion.use[1]
+          
+for (starting_assets in 10^(8)) {  
+for (cashflow_percent in 0) {  
+for (size in c(1000)) {  
+for (proportion in proportion.use) {
+for (weighting_scheme in c("Cap")) {
+for (trade_cost_include in c(TRUE,FALSE)) {
+
+  if (factor.use == 0) Factor_choose = factor.name[1]
+  if (factor.use > 0) Factor_choose = factor.name[factor.use]
 
 data_use = subset(data_return,(DateYYYYMM>=start.Date)&(DateYYYYMM<=end.Date)&(is_investable==1)&(is_liquid==1))
 data_use = subset(data_use,select=c( "DateYYYYMM","ws_id","Price","Div",Factor_choose,"mktcap","median_volume_usd"))
@@ -122,39 +82,12 @@ factor_bins_count = length(factor_bins)
 
 data_use$mktcap = data_use$mktcap*1000000                         # get everything in $ as mktcap saved in $1m units
 data_use$median_volume_usd = data_use$median_volume_usd*1000000   # get everything in $ as volume saved in $1m units
-
-#### Plot Aggregate Mkt Cap
-
-mkt_size = aggregate(mktcap ~ Date,data=data_use,sum)
-
-head(mkt_size)
-tail(mkt_size)
-
-plot((mkt_size$Date - mkt_size$Date %% 100)/100 + (mkt_size$Date %% 100)/12,log(mkt_size$mktcap,10),type="l",xlab="Year",ylab="Log(10) Aggregate Mkt Cap")
-
-
-#### Subset calculations with no and some optimisation
-
-trade_impact = 6
-cashflow_percent = 0    #.05   # annual cashflow out of account as % of assets
-starting_assets = 10^(6)  
-cashflow_percent = 0  
-size = 500  
-
-if (factor.use == 0) proportion.use = 1
-if (factor.use > 0) proportion.use = c((1:4)/4)
-
-weighting_scheme = "Cap"
-optimised= TRUE
-          
-for (starting_assets in 10^(7)) {  
-for (cashflow_percent in 0) {  
-for (size in c(500)) {  
-for (proportion in proportion.use) {
-for (weighting_scheme in c("Cap")) {
-for (trade_impact in c(6)) {
-
+  
+table(data_return$DateYYYYMM)  
+table(data_use$Date)  
+  
 Dates_scroll = unique(data_use$Date)
+Dates_scroll = sort(Dates_scroll)
 Dates_scroll_no = length(Dates_scroll)
 
 data_use_subset = subset(data_use,Date==Dates_scroll[1])
@@ -190,6 +123,11 @@ data_use_subset = merge(data_use_subset,investment_eligible_out)
 weighting_list = weighting_input(data_use_subset,weighting_scheme = weighting_scheme)
 weights_new = weighting_strategy(weighting_list,proportion=proportion)
 
+weights_new_compare = data_use_subset$mktcap/sum(data_use_subset$mktcap)
+
+A = cbind(weights_new,weights_new_compare)
+max(abs(apply(A,1,diff)))
+
 data_use_subset$Asset_Amount = weights_new * starting_assets
 data_use_subset$Shares = floor(data_use_subset$Asset_Amount / data_use_subset$Price)
 data_use_subset$Asset_Amount = data_use_subset$Shares * data_use_subset$Price
@@ -213,20 +151,24 @@ data_use_tax = subset(data_use_subset,select=c("Date", "Asset", "Price_Trade","S
 ### create portfolio holdings
 i=i+1
 
-for (i in 2:(Dates_scroll_no)) {
+#Dates_scroll_no=322
+
+for (i in 2:Dates_scroll_no) {
   
     data_use_subset = subset(data_use,Date== Dates_scroll[i])
   
     data_use_old = subset(data_use_last,select=c("Asset","Shares","Price"))
     names(data_use_old) = c("Asset","Shares_Start","Price_Start")
     data_use_new = merge(data_use_subset,data_use_old,by="Asset",all=TRUE)
-
+    
     data_use_new = data_use_new[!is.na(data_use_new$Price),] 
 
     data_use_new$Shares[is.na(data_use_new$Shares)]=0
     data_use_new$Price_Start[is.na(data_use_new$Price_Start)]=0
     data_use_new$Shares_Start =   data_use_new$Shares
     data_use_new$Asset_Amount_Start =   data_use_new$Shares_Start*data_use_new$Price
+    sum(data_use_new$Shares_Start*data_use_new$Price)
+    sum(data_use_new$Shares_Start*data_use_new$Price_Start)
     
     Div_paid[i] = sum(data_use_new$Shares_Start*data_use_new$Div)
     
@@ -235,7 +177,7 @@ for (i in 2:(Dates_scroll_no)) {
 
 ## determine eligible if no data for following month
     
-    investment_eligible_out = investment_eligible(data_use_new,size,Dates_scroll[i])
+    investment_eligible_out = investment_eligible(data_use,size,Dates_scroll[i])
     dim(data_use_new) 
     dim(investment_eligible_out)
     data_use_new = merge(data_use_new,investment_eligible_out, )    
@@ -261,6 +203,11 @@ for (i in 2:(Dates_scroll_no)) {
     
     sum(data_use_new$Shares) 
     sum(data_use_new$Price)
+    sum(data_use_new$Asset_Amount_Start)
+    sum(data_use_new$Asset_Amount)
+    
+    
+    data_use_new[data_use_new$Eligible,]
     
     head(data_use_new)
     data_use_new
@@ -307,19 +254,30 @@ for (i in 2:(Dates_scroll_no)) {
                       opts = list("algorithm"="NLOPT_LN_COBYLA", print_level=0,xtol_rel = 1e-5,maxeval=250,maxtime=50),
                       data_subset_opt = data_subset_opt )
      
-      print(c(proportion,Dates_scroll[i],tc_calc(res1$solution,data_subset_opt),tc_calc(weights_start_allowable,data_subset_opt),tc_calc(weights_new_allowable,data_subset_opt)))
+      print(c(Dates_scroll[i],tc_calc(res1$solution,data_subset_opt),tc_calc(weights_start_allowable,data_subset_opt),tc_calc(weights_new_allowable,data_subset_opt)))
+      data_use_new$Asset_Amount = 0      
+      if (tc_calc(weights_start_allowable,data_subset_opt)<tc_calc(res1$solution,data_subset_opt)) 
+          {print("Start")
+        data_use_new$Asset_Amount[Investment_allowable] = weights_start_allowable * assets
+      } else 
+          {print("Optimised")
+          data_use_new$Asset_Amount[Investment_allowable] = res1$solution * assets
+          }
+      #data_use_new$Asset_Amount[Investment_allowable] = weights_new_allowable * assets
+  }      
 
-      data_use_new$Asset_Amount = 0
-      data_use_new$Asset_Amount[Investment_allowable] = res1$solution * assets
-      
-    }
-
-    ### Calculate new data for next month
+        ### Calculate new data for next month
     
     data_use_new$Shares = floor(data_use_new$Asset_Amount / data_use_new$Price)
     data_use_new$Shares[is.nan(data_use_new$Shares)]=0
     
+    sum(data_use_new$Shares_Trade*data_use_new$Price) / sum(data_use_new$Asset_Amount)
+    
+   max((data_use_new$Shares_Trade*data_use_new$Price) / sum(data_use_new$Asset_Amount))
+   min((data_use_new$Shares_Trade*data_use_new$Price) / sum(data_use_new$Asset_Amount))
+   
     sum(data_use_new$Asset_Amount)
+    
     sum( data_use_new$Price)
 
     data_use_new$Asset_Amount = data_use_new$Shares * data_use_new$Price
@@ -329,10 +287,16 @@ for (i in 2:(Dates_scroll_no)) {
     data_use_new = subset(data_use_new,select=c("Date", "Asset", "Price","mktcap", "Factor" , "Shares_Start", "Asset_Amount_Start","Shares","Asset_Amount", "Shares_Trade"))
     data_use_new$mktcap[data_use_new$mktcap==0] = min(data_use_new$mktcap[data_use_new$mktcap>0])
     
-    output_tc = trasaction_costs(data_use_new)
+    output_tc = trasaction_costs(data_use_new,trade_cost_include)
     data_use_new = merge(data_use_new,output_tc,by=c("Asset"))
 
     data_use_new$Price_Trade = (data_use_new$Price + data_use_new$Trade_cost_IC)
+    
+    p=770
+    data_use_new[p,]
+    order(data_use_new$Trade_cost_IC / data_use_new$Price)
+    max(data_use_new$Trade_cost_IC / data_use_new$Price)
+    
     
     Cash[i] = Cash[i-1] + Div_paid[i] - sum(data_use_new$Price_Trade*data_use_new$Shares_Trade) - sum(data_use_new$Trade_cost_EC)
     Assets[i] = Cash[i] + sum(data_use_new$Price*data_use_new$Shares)
@@ -343,14 +307,18 @@ for (i in 2:(Dates_scroll_no)) {
     sum(data_use_new$Price)
     sum(data_use_new$Shares)
 
-        Trade_Cost[i] = sum(data_use_new$Price*data_use_new$Shares_Trade)  - sum(data_use_new$Price_Trade*data_use_new$Shares_Trade)          
+    Trade_Cost[i] = sum(data_use_new$Price*data_use_new$Shares_Trade)  - sum(data_use_new$Price_Trade*data_use_new$Shares_Trade)    - sum(data_use_new$Trade_cost_EC)      
     Turnover[i] = sum(abs(data_use_new$Price_Trade*data_use_new$Shares_Trade))
         
     data_use_last = data_use_new
 
-    #print(c(Dates_scroll[i],Assets[i]))    
+    #print(c(Dates_scroll[i],Assets_keep[i,1],Assets_keep[i,2],Assets[i], tc_calc(res1$solution,data_subset_opt),tc_calc(weights_start_allowable,data_subset_opt),tc_calc(weights_new_allowable,data_subset_opt)))    
+    plot(log(index),type="l")
+    lines(log(Index[1:i]),col=2)
+    lines(log(index_2),col=3)
 }
 
+data_use_new$Asset_Amount/sum(data_use_new$Asset_Amount)
 
 if (FALSE) {
   results =  (c(trade_impact,
@@ -366,7 +334,7 @@ if (FALSE) {
 
 results =  c(optimised,
              Factor_choose, direction,
-             trade_impact,
+             trade_cost_include,
              size,
              starting_assets,
               proportion,
@@ -375,11 +343,11 @@ results =  c(optimised,
 
 print(results)
 results.keep = rbind(results.keep,results)
-data_save_filename=c("New_Data_output_Mom_Opt.csv")
+data_save_filename=c("Data_output_Many.csv")
 setwd(dir.data)
 write.csv(results.keep,file=data_save_filename)
 
-Assets_keep <- cbind(Assets_keep,Index)
+Assets_keep <- cbind(Assets_keep,Assets)
 
 }
 }
@@ -387,4 +355,4 @@ Assets_keep <- cbind(Assets_keep,Index)
 }
 }
 }
-}}
+}

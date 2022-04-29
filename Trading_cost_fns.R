@@ -38,10 +38,10 @@ p.rank = function(f_data) {
 ################
 
 signal_processing = function(data_use_subset,signal.name=c("Factor"),return_spread=0.01) {
-  
+  #data_use_subset = data_subset_opt
   signal = as.matrix(subset(data_use_subset,select=signal.name))
-  signal_order = p.rank(signal)
-  signal_return = (signal_order -0.5) * return_spread
+  signal_order = (floor(p.rank(signal)*5))/2 - 1
+  signal_return = (signal_order) * return_spread
   signal_return[is.na(signal_return)] = 0
   
   return(signal_return)
@@ -90,7 +90,7 @@ weighting_strategy = function(data_input,proportion=0.25) {
 ################
 
 investment_eligible = function(data_use,size,date_select) {
-    #date_select = 198001
+    #date_select = 197301
     
     data_use_subset_current = subset(data_use,Date== date_select,select=c("Asset","Price","mktcap"))
     asset_count = dim(data_use_subset_current)[1]
@@ -108,12 +108,17 @@ investment_eligible = function(data_use,size,date_select) {
     
     dim(data_use_new_fwd)
     
+    data_use_new_fwd$Eligible[is.na(data_use_new_fwd$Price_Fwd)]
+    
     data_use_new_fwd$mktcap[!data_use_new_fwd$Eligible] = 0
     data_use_new_fwd$Eligible = FALSE
     size_all = length(order(data_use_new_fwd$mktcap,decreasing=TRUE))
     size_use = min(size,size_all)
     data_use_new_fwd$Eligible[order(data_use_new_fwd$mktcap,decreasing=TRUE)[1:size_use]] = TRUE
-
+    data_use_new_fwd$Eligible[is.na(data_use_new_fwd$Price_Fwd)] = FALSE
+    data_use_new_fwd$Eligible[(data_use_new_fwd$Price_Fwd)==0] = FALSE
+    data_use_new_fwd$Eligible[(data_use_new_fwd$Price)==0] = FALSE
+    
     investment_eligible = subset(data_use_new_fwd,select=c("Asset","Eligible"))
     
     dim(investment_eligible)
@@ -128,19 +133,21 @@ investment_eligible = function(data_use,size,date_select) {
 ### explicit and implicit
 ################
 
-trasaction_costs = function(data_sub) {
+trasaction_costs = function(data_sub,trade_cost_include) {
 
-  #data_sub=data_use_new
+  #data_sub=data_use_new[770,]
   
   Output = subset(data_sub,select=c("Asset"))
-  Output$Trade_Cost_IC_rel = (data_sub$Shares_Trade*data_sub$Price^2)/data_sub$mktcap*trade_impact
+  Output$Trade_Cost_IC_rel = (data_sub$Shares_Trade*data_sub$Price^2)/data_sub$mktcap*6
   Output$Trade_Cost_IC_abs = sign(data_sub$Shares_Trade)*0.0028/2*min(data_sub$mktcap)/data_sub$mktcap*data_sub$Price
   Output$Trade_cost_IC = sign(Output$Trade_Cost_IC_abs)*apply(abs(subset(Output,select=c(Trade_Cost_IC_abs,Trade_Cost_IC_rel))),1,max)
 
   Output$Trade_Cost_EC_rel = 0.0001*abs(data_sub$Shares_Trade*data_sub$Price)
   Output$Trade_Cost_EC_abs = 5
   Output$Trade_Cost_EC_abs[data_sub$Shares_Trade==0] = 0
-  Output$Trade_cost_EC = apply(abs(subset(Output,select=c(Trade_Cost_EC_abs,Trade_Cost_EC_rel))),1,max)    
+  Output$Trade_cost_EC = apply(abs(subset(Output,select=c(Trade_Cost_EC_abs,Trade_Cost_EC_rel))),1,max)   
+  if (!trade_cost_include) {
+      Output[,-1] = 0 }
   return(Output)
 }
 
@@ -162,7 +169,7 @@ tc_calc = function(x,data_subset_opt) {
   data_subset_opt = subset(data_subset_opt,select=c("Date", "Asset", "Price","mktcap", "Factor" , "Shares_Start", "Asset_Amount_Start","Shares","Asset_Amount", "Shares_Trade","Exp_Return"))
   data_subset_opt$mktcap[data_subset_opt$mktcap==0] = min(data_subset_opt$mktcap[data_subset_opt$mktcap>0])
   
-  output_tc = trasaction_costs(data_subset_opt)
+  output_tc = trasaction_costs(data_subset_opt,trade_cost_include=TRUE)
   data_subset_opt = merge(data_subset_opt,output_tc,by=c("Asset"))
   
   transaction_cost = sum(data_subset_opt$Trade_cost_EC) + sum(data_subset_opt$Trade_cost_IC*data_subset_opt$Shares_Trade)
